@@ -1,110 +1,76 @@
-from sqlalchemy.exc import IntegrityError
-from flask import Flask, render_template, request, redirect, flash
-from datetime import datetime, time, timedelta
-from flask_sqlalchemy import SQLAlchemy
-import sys
 import requests
-import os
-
+import string
+from flask import Flask, render_template, request, redirect, url_for, flash
+from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
-
-app.secret_key = os.environ.get('API_KEY')
-api_key = os.environ.get('API_KEY')
-early = time(5, 0, 0)
-morning = time(6, 0, 0)
-nightfall = time(17, 0, 0)
-night = time(19, 0, 0)
-
-# ============= DATABASE ===============
-db = SQLAlchemy(app)
+app.config['DEBUG'] = True
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///weather.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SECRET_KEY'] = 'thisisasecret'
+db = SQLAlchemy(app)
 
 
-class City(db.Model):
-    __events__ = 'events'
+class City(db.Model) :
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.VARCHAR, nullable=False, unique=True)
+    name = db.Column(db.String(50),nullable=False)
 
-# delte previous data
-# if os.path.exists("weather.db"):
-#         os.remove("weather.db") 
+def get_weather_data(city):
+    url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&units=metric&appid=c02a4a9162d16e4537a3874bf294f68b"
+    r = requests.get(url).json()
+    return r
 
-db.create_all()
-
-
-# ============= PROCESSING ===============
-def GetTemp(city):
-    response = requests.get(f'https://api.openweathermap.org/data/2.5/weather?appid={api_key}&q={city.name}')
-    temp = response.json()['main']['temp'] - 273.15
-    desc = response.json()['weather'][0]['description']
-    timeShift = response.json()['timezone'] / 3600
-    tempo = GetTimeOfDay(timeShift)
-    return {'temp': round(temp, 1), 'desc': desc.title(), 'time': tempo, 'name': city.name, 'id': city.id}
-
-
-def GetTimeOfDay(timeShift):
-    if '-' in str(timeShift):
-        timeShift = timeShift * -1
-        hour = datetime.utcnow() - timedelta(hours=timeShift)
-    else:
-        hour = datetime.utcnow() + timedelta(hours=timeShift)
-    if morning < hour.time() < nightfall:
-        return "day"
-    elif hour.time() > night or hour.time() < early:
-        return "night"
-    else:
-        return "evening-morning"
-
-
-def SetCityList():
-    list_ = []
-    cities = City.query.all()
-    for i in cities:
-        list_.append(GetTemp(i))
-    return list_
-
-
-# ============= ROUTES ===============
 @app.route('/')
-def index():
-    list_ = SetCityList()
-    return render_template('index.html', weather=list_)
+def index_get():
+    cities = City.query.all()
 
+    weather_data = []
 
+    for city in cities:
+        r = get_weather_data(city.name)
+        weather = {
+            'city' : city.name,
+            'temperature' : r['main']['temp'],
+            'description' : r['weather'][0]['description'],
+            'icon' : r['weather'][0]['icon'],
+        }
+        weather_data.append(weather)
 
-@app.route('/add', methods=['POST'])
-def add_city():
-    city_name = request.form.get('city_name')
-    city = City(name=city_name)
-    response = requests.get(f'https://api.openweathermap.org/data/2.5/weather?q={city_name}&appid={api_key}')
-    if response.json()['cod'] == '404':
-        flash("The city doesn't exist!")
-    elif response.json()['cod'] == '304':
-        flash("The city doesn't exist!")
-    elif response.json()['cod'] == '500':
-        return redirect('/')
+    return render_template('weather.html', weather_data=weather_data)
+
+@app.route('/', methods=['POST'])
+def index_post():
+    err_msg = ''
+    new_city = request.form.get('city')
+    new_city = new_city.lower()
+    new_city = string.capwords(new_city)
+    if new_city:
+        existing_city = City.query.filter_by(name=new_city).first()
+        
+        if not existing_city:
+            new_city_data = get_weather_data(new_city)
+            if new_city_data['cod'] == 200:
+                new_city_obj = City(name=new_city)
+
+                db.session.add(new_city_obj)
+                db.session.commit()
+            else:
+                err_msg = 'That is not a valid city!'
+        else:
+            err_msg = 'City already exists in the database!'
+
+    if err_msg:
+        flash(err_msg, 'error')
     else:
-        try:
-            db.session.add(city)
-            db.session.commit()
-        except IntegrityError:
-            flash('The city has already been added to the list!')
-    return redirect('/')
+        flash('City added successfully!', 'success')
 
+    return redirect(url_for('index_get'))
 
-@app.route('/delete/<city_id>', methods=['GET', 'POST'])
-def delete_city(city_id):
-    city = City.query.filter_by(id=city_id).first()
+@app.route('/delete/<name>')
+def delete_city( name ):
+    city = City.query.filter_by(name=name).first()
     db.session.delete(city)
     db.session.commit()
-    return redirect('/')
 
-
-# don't change the following way to run flask:
-if __name__ == '__main__':
-    if len(sys.argv) > 1:
-        arg_host, arg_port = sys.argv[1].split(':')
-        app.run(host=arg_host, port=arg_port, debug=True)
-    else:
-        app.run(debug=True)
+    flash(f'Successfully deleted { city.name }!', 'success')
+    return redirect(url_for('index_get'))

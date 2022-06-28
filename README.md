@@ -1,28 +1,31 @@
-# Weather-website-flask
-Website with the climate of different cities of your choice, using Flask and SQLlite to store information from the OpenWeather api
+## Flask Weather App
 
-You can change database that you want to delete or not by adding or remove comment on delete previous data in app.py file.
+A simple web application to display the current weather in various cities, built with Python, Flask, SQLAlchemy, SQLite, HTML, and Bulma.
 
-## To make api key file
-1 Make ".env" file 
-2 Add below txt in it,
-```
-API_KEY = 'API_KEY'
-```
+This project is intended to help familiarize myself with web development with Python and Flask, and is based on this [tutorial](https://www.youtube.com/watch?v=lWA0GgUN8kg).
 
-# Run Program
+## Project Status
+This project is currently in development. Future updates wil include clickable tiles for time, news, etc.
 
-## To activate Virtual Environment
-````
-venv\Scripts\activate
-````
+#### Example:   
+![Image description](https://github.com/jkaethee/Flask-Weather-App/blob/master/images/weather%20app.PNG)
 
-# To Deactive Virtual Environment
-```
-deactive
-```
+## Installation and Setup Instructions
 
-# To run the program
-`````
-py app.py
-`````
+Clone this repository. You will need `python`, `virtualenv`, and `virtualenvwrapper-win` installed on your machine.
+
+#### Set up a virtual environment:
+
+`mkvirtualenv FlaskWeatherApp`
+
+#### Installation:
+
+`pip install flask`
+
+`pip install flask_sqlalchemy`
+
+`pip install requests`   
+
+#### To Start Server:
+
+`flask run`  
